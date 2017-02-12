@@ -18,9 +18,9 @@ def index():
         inline_results = [
             {'type': 'photo',
             'id': '1',
-            'photo_url': "http://peppercarrot.com/extras/html/2016_cat-generator/avatar.php?seed={0}".format(msg["inline_query"]["query"]),
-            'thumb_url': "http://peppercarrot.com/themes/peppercarrot-theme_v2/cat-avatar-generator.php?seed={0}".format(msg["inline_query"]["query"]),
-            'caption': "{0}'s avatar! generated with\n@{1} 😸".format(msg["inline_query"]["query"],app.config["BOT_USERNAME"]),
+            'photo_url': "http://peppercarrot.com/extras/html/2016_cat-generator/avatar.php?seed={0}".format(msg["inline_query"]["query"].replace(" ", "+")),
+            'thumb_url': "http://peppercarrot.com/themes/peppercarrot-theme_v2/cat-avatar-generator.php?seed={0}".format(msg["inline_query"]["query"].replace(" ", "+")),
+            'caption': "{0}'s avatar! create yours with\n@{1} 😸".format(msg["inline_query"]["query"],app.config["BOT_USERNAME"]),
             }
         ]
 
@@ -54,11 +54,20 @@ def index():
             }
             return jsonify(answer)
 
+    if not "text" in msg["message"]:
+        answer = {
+            'method': "sendMessage",
+            'chat_id': msg["message"]["chat"]["id"],
+            'text': "Hi! *Write your name and get your cat avatar!*",
+            'parse_mode': 'Markdown',
+        }
+        return jsonify(answer)
+
     answer = {
         'method': "sendPhoto",
-        'photo': "http://peppercarrot.com/extras/html/2016_cat-generator/avatar.php?seed={0}".format(msg["message"]["text"]),
+        'photo': "http://peppercarrot.com/extras/html/2016_cat-generator/avatar.php?seed={0}".format(msg["message"]["text"].replace(" ", "+")),
         'chat_id': msg["message"]["chat"]["id"],
-        'caption': "{0}'s avatar! generated with @{1} 😸\nArt from http://peppercarrot.com\n\nTake a look to rDany bot, your virtual BFF!\n@rDanyBot 🤖".format(msg["message"]["text"], app.config["BOT_USERNAME"]),
+        'caption': "{0}'s avatar! create yours with @{1} 😸\nArt from http://peppercarrot.com\n\nAlso, rDany bot, your virtual BFF!\n@rDanyBot 🤖".format(msg["message"]["text"], app.config["BOT_USERNAME"]),
         'parse_mode': "Markdown"
     }
 
