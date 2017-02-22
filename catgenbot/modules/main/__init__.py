@@ -4,7 +4,9 @@ from flask import jsonify
 from flask import request
 
 import json
+import time
 import requests
+import datetime
 
 import random as rd
 
@@ -12,33 +14,76 @@ from catgenbot import app
 
 main = Blueprint('main', __name__)
 
+## SQLITE
 
-def save_stats(json_status):
-    return
-    json_status["count"] += 1
-    with open("stats.json", 'w', encoding='utf-8') as data_file:
-         json.dump(json_status, data_file, sort_keys=True, indent=4, separators=(',', ': '))
+import sqlite3
+from flask import g
+
+DATABASE = 'stats.db'
+
+
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+    return db
+
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+def query_db(query, args=(), one=False):
+    cur = get_db().execute(query, args)
+    rv = cur.fetchall()
+    cur.close()
+    return (rv[0] if rv else None) if one else rv
+
+
+def sqlite_execute(query, name, debug = False):
+    try:
+        cur = get_db().execute(query)
+        get_db().commit()
+        print ('{0} applied'.format(name))
+        return True
+    except sqlite3.OperationalError:
+        print ('{0} already applied'.format(name))
+        if debug:
+            raise
+        return False
+    except:
+        raise
+
+
+def init_db ():
+    sqlite_execute('''CREATE TABLE stats
+                         (id integer primary key, query_type integer)''', "stats")
+
+    sqlite_execute('''ALTER TABLE stats
+                     ADD COLUMN datetime integer;''',
+                     "datetime on stats")
+
+    sqlite_execute('''ALTER TABLE stats
+                     ADD COLUMN days integer;''',
+                     "days on stats")
+##
+
+def save_stats(query_type):
+    epoch = datetime.datetime.utcfromtimestamp(0)
+    today = datetime.datetime.today()
+    d = today - epoch
+    #d.days # timedelta object
+    get_db().execute("INSERT INTO stats VALUES (null, ?, ?, ?)", [query_type, int(time.time()), d.days])
+    get_db().commit()
+
 
 @main.route('/', methods=['POST', 'GET']) 
 def index():
     msg = request.json
 
-    json_status = {
-        "count": 0,
-        "inline": 0,
-        "no_message": 0,
-        "left_chat_member": 0,
-        "new_chat_member": 0,
-        "no_text": 0,
-        "avatar": 0
-    }
-    #with open("stats.json", encoding='utf-8') as data_file:
-    #    try:
-    #        json_status_open = json.load(data_file)
-    #        for key in json_status_open:
-    #            json_status[key] = json_status_open[key]
-    #    except:
-    #        raise
+    init_db()
 
 
     if "inline_query" in msg:
@@ -59,13 +104,11 @@ def index():
             'results': inline_json,
             'cache_time': 3000
         }
-        json_status["inline"] += 1
-        save_stats(json_status)
+        save_stats("inline")
         return jsonify(answer)
 
     if not "message" in msg:
-        json_status["no_message"] += 1
-        save_stats(json_status)
+        save_stats("no_message")
         return jsonify({})
 
     if "left_chat_member" in msg["message"]:
@@ -75,8 +118,7 @@ def index():
                 'chat_id': msg["message"]["chat"]["id"],
                 'text': '{0} 😿'.format(msg["message"]["left_chat_member"]["first_name"])
             }
-            json_status["left_chat_member"] += 1
-            save_stats(json_status)
+            save_stats("left_chat_member")
             return jsonify(answer)
     elif "new_chat_member" in msg["message"]:
         if msg["message"]["new_chat_member"]["first_name"].lower() == app.config["BOT_USERNAME"].lower():
@@ -85,8 +127,7 @@ def index():
                 'chat_id': msg["message"]["chat"]["id"],
                 'text': 'Hi! 😸'
             }
-            json_status["new_chat_member"] += 1
-            save_stats(json_status)
+            save_stats("new_chat_myself")
             return jsonify(answer)
         if rd.random()>0.5:
             answer = {
@@ -94,8 +135,7 @@ def index():
                 'chat_id': msg["message"]["chat"]["id"],
                 'text': 'Welcome {0}! 😸'.format(msg["message"]["new_chat_member"]["first_name"])
             }
-            json_status["new_chat_member"] += 1
-            save_stats(json_status)
+            save_stats("new_chat_member")
             return jsonify(answer)
 
     if msg["message"]["chat"]["type"] not in ["private", "group"]:
@@ -108,15 +148,14 @@ def index():
             'text': "Hi! *Write your name and get your cat avatar!*",
             'parse_mode': 'Markdown',
         }
-        json_status["no_text"] += 1
-        save_stats(json_status)
+        save_stats("no_text")
         return jsonify(answer)
 
     answer = {
         'method': "sendPhoto",
         'photo': "http://peppercarrot.com/extras/html/2016_cat-generator/avatar.php?seed={0}".format(msg["message"]["text"].replace(" ", "+")),
         'chat_id': msg["message"]["chat"]["id"],
-        'caption': "{0}'s avatar! create yours with @{1} 😸\nArt from http://peppercarrot.com\n\nAlso, rDany bot, your virtual BFF!\n@rDanyBot 🤖".format(msg["message"]["text"], app.config["BOT_USERNAME"]),
+        'caption': "{0}'s avatar! create yours with @{1} 😸\n\nArt from http://peppercarrot.com\n\n⭐️⭐️⭐️⭐️⭐️ https://telegram.me/storebot?start={1}".format(msg["message"]["text"], app.config["BOT_USERNAME"]),
         'parse_mode': "Markdown"
     }
 
@@ -137,6 +176,5 @@ def index():
         }
 
 
-    json_status["avatar"] += 1
-    save_stats(json_status)
+    save_stats("avatar")
     return jsonify(answer)
